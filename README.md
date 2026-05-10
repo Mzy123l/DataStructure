@@ -406,5 +406,5 @@ g++ -std=c++20 -I./include main.cpp -o my_app
 欢迎提交 Issue 和 Pull Request。请确保代码符合项目代码风格，并添加相应的测试。
 
 ## 作者
-
+// 正在学习数据结构中，这是一个很棒的项目！
 由Sonder开发维护。
