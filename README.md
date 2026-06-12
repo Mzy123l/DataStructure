@@ -43,7 +43,7 @@
 只需将头文件复制到你的项目中即可使用：
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Mzy123l/DataStructure
 cp -r include/ /your/project/include/
 ```
 
