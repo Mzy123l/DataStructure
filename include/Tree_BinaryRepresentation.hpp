@@ -22,8 +22,8 @@ namespace Tree
 		template <typename Iter>
 		concept Iterator = requires(Iter iter)
 		{
-			{ *iter } -> std::convertible_to<typename Iter::value_type&>;
-			{ ++iter } -> std::same_as<Iter&>;
+			{ *iter } -> ::std::convertible_to<typename Iter::value_type&>;
+			{ ++iter } -> ::std::same_as<Iter&>;
 		};
 
 		// 节点概念
@@ -32,10 +32,10 @@ namespace Tree
 		{
 			typename Node::value_type;
 		}
-		&& std::derived_from<Node, ::TreeNode::Node_BinaryRepresentation<typename Node::value_type>>;
+		&& ::std::derived_from<Node, ::TreeNode::Node_BinaryRepresentation<typename Node::value_type>>;
 	}
 
-	template <typename T, typename Derived, Inner_BinaryTree::TreeNode tree_node, typename Allocator = std::allocator<tree_node>>
+	template <typename T, typename Derived, Inner_BinaryTree::TreeNode tree_node, typename Allocator = ::std::allocator<tree_node>>
 	class Tree_BinaryRepresentation : public TreeBase<T, Tree_BinaryRepresentation<T, Derived, tree_node, Allocator>, tree_node, Allocator>
 	{
 	public:
