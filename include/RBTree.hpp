@@ -164,7 +164,9 @@ namespace Tree
         RBTree(const Comp& comp = Comp(), const Allocator& alloc = Allocator())
             : Base(0, NodeAllocator(alloc)), m_comp(comp)
         {}
-
+        RBTree(const Allocator& alloc)
+            : Base(0, NodeAllocator(alloc)), m_comp(Comp())
+        {}
         RBTree(const RBTree& other) : Base(other), m_comp(other.m_comp) {}
 
         RBTree& operator=(const RBTree& other)
@@ -263,7 +265,7 @@ namespace Tree
             while (z)
             {
                 const T& z_val = z->get_val();
-                if (m_comp(val, z_val)) 
+                if (m_comp(val, z_val))
                 {
                     z_parent = z;
                     z = left_child(z);
@@ -545,7 +547,7 @@ namespace Tree
             while (current)
             {
                 const T& cur_val = current->get_val();
-                if (m_comp(value, cur_val)) 
+                if (m_comp(value, cur_val))
                 {
                     current = left_child(current);
                 }
@@ -561,4 +563,4 @@ namespace Tree
             return std::nullopt;
         }
     };
-    
+}
