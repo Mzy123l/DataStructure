@@ -295,7 +295,7 @@ namespace Tree
                 x = right_child(z);
                 x_parent = y_original_parent;
                 transplant(z, right_child(z));
-                if (!x) x = y_original_parent;
+                // BUG FIX: 删除原代码中的 if (!x) x = y_original_parent;
             }
             else if (!right_child(z))
             {
@@ -303,7 +303,7 @@ namespace Tree
                 x = left_child(z);
                 x_parent = y_original_parent;
                 transplant(z, left_child(z));
-                if (!x) x = y_original_parent;
+                // BUG FIX: 删除原代码中的 if (!x) x = y_original_parent;
             }
             else
             {
@@ -437,7 +437,6 @@ namespace Tree
             --m_size;
             return true;
         }
-
         // 查找
         std::optional<std::reference_wrapper<T>> find(const T& val)
         {
