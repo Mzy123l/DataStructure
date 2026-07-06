@@ -75,7 +75,8 @@ namespace Tree
 		{
 			if (!node || !is_valid_char(ch)) return nullptr;
 			size_t idx = char_to_index(ch);
-			// 注意：child_count() 可能小于62，但child(i)在i越界时会返回nullptr
+			// 边界检查：节点可能未扩容到 ALPHABET_SIZE
+			if (idx >= node->child_count()) return nullptr;
 			return node->child(idx);
 		}
 

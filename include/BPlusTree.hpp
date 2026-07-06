@@ -79,11 +79,11 @@ namespace Tree
 			{
 				if (type_ == NodeType::Inner)
 				{
-					data_.inner_.~decltype(data_.inner_)();
+					std::destroy_at(&data_.inner_);
 				}
 				else
 				{
-					data_.leaf_.~decltype(data_.leaf_)();
+					std::destroy_at(&data_.leaf_);
 				}
 			}
 

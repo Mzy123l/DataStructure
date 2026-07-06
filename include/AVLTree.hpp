@@ -34,7 +34,7 @@ namespace TreeNode
     class AVLNode :public Node_BinaryRepresentation<T>
     {
     public:
-        template <typename T, Tree::Inner_AVLTree::Comparator<T> Comp, typename Allocator>
+        template <typename U, Tree::Inner_AVLTree::Comparator<U> Comp, typename Allocator>
         friend class ::Tree::AVLTree;
 
         ~AVLNode() = default;

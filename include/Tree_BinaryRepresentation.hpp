@@ -121,7 +121,7 @@ namespace Tree
 			}
 			DerivedIterator operator++(int)
 			{
-				Iterator_base tmp = *this;
+				DerivedIterator tmp = static_cast<const DerivedIterator&>(*this);
 				++(*this);
 				return tmp;
 			}
@@ -150,6 +150,7 @@ namespace Tree
 			using Base::container;
 			using Base::current;
 		public:
+		using Base::operator++;  // 暴露基类后置++
 			explicit PreIterator(NodePtr root) : Base(root) {}
 
 			PreIterator& operator++()
@@ -190,6 +191,7 @@ namespace Tree
 			using Base::current;
 
 		public:
+		using Base::operator++;  // 暴露基类后置++
 			// 构造函数 - 完全重写基类的行为
 			explicit InIterator(NodePtr root)
 			{
@@ -255,6 +257,7 @@ namespace Tree
 			using Base::container;
 			using Base::current;
 		public:
+		using Base::operator++;  // 暴露基类后置++
 			// 构造函数
 			explicit PostIterator(NodePtr root) : Base(root)
 			{
@@ -296,6 +299,7 @@ namespace Tree
 			using Base::container;
 			using Base::current;
 		public:
+		using Base::operator++;  // 暴露基类后置++
 			LevelIterator(NodePtr root) : Base(root) {}
 
 			LevelIterator& operator++()

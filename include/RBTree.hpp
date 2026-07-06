@@ -47,7 +47,7 @@ namespace TreeNode
     class RBNode : public Node_BinaryRepresentation<T>
     {
     public:
-        template <typename T, ::Tree::Inner_RBTree::Comparator<T> Comp, typename Allocator>
+        template <typename U, ::Tree::Inner_RBTree::Comparator<U> Comp, typename Allocator>
         friend class ::Tree::RBTree;
 
         ~RBNode() = default;

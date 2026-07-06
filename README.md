@@ -397,6 +397,72 @@ g++ -std=c++20 -I./include main.cpp -o my_app
 - **链表**: O(1) 的插入删除（已知位置），适合频繁修改的场景
 - **并查集**: 近乎 O(1) 的合并和查找操作，适合连通性问题
 
+## 测试
+
+本项目使用 Google Test 框架进行测试。所有测试在 GCC/Clang -O3 优化下运行。
+
+### 构建与运行测试
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+make -C build -j$(nproc)
+ctest --test-dir build
+```
+
+或单独运行某个测试：
+
+```bash
+./build/test_avl
+./build/test_rb
+./build/test_bpt
+./build/test_trie
+./build/test_sll
+./build/test_dll
+./build/test_uf
+```
+
+### 测试覆盖（共 513 个测试用例）
+
+| 数据结构 | 测试数 | 覆盖内容 |
+|---------|--------|---------|
+| AVLTree | 70 | 构造/赋值/插入/删除/查找/迭代器/边界/深拷贝/移动/自定义比较器/平衡性验证/压力测试 |
+| RBTree | 90 | 构造/赋值/插入/删除/查找/迭代器/边界/深拷贝/移动/自定义比较器/红黑性质/压力测试 |
+| BPlusTree | 61 | 构造/插入/删除/查找/边界/移动语义/叶节点链表/不同阶数/压力测试 |
+| Trie | 35 | 构造/插入/搜索/前缀/删除/清空/拷贝/移动/大小写/数字/压力测试 |
+| singlyLinkedList | 83 | 构造/插入/删除/查找/迭代器/Size/深拷贝/移动/自定义类型/压力测试 |
+| doublyLinkedList | 111 | 构造/插入/删除/查找/迭代器/Size/清空/深拷贝/双向遍历/集成测试 |
+| UnionFind | 63 | 构造/查找/合并/连通性/计数/批量操作/移动/路径压缩/泛型类型/压力测试 |
+
+### 性能基准测试
+
+运行 `./build/benchmark` 可查看与 STL 的对比数据：
+
+| 对比项 | 结果 |
+|--------|------|
+| AVLTree vs std::set 插入 | AVLTree 略慢（~1.8x），同一数量级 |
+| AVLTree vs std::set 查找 | 基本持平 |
+| AVLTree vs std::set 迭代 | AVLTree 更快（栈迭代器 vs 树迭代器） |
+| RBTree vs std::set 插入 | 略慢（~1.2x） |
+| RBTree vs std::set 删除 | RBTree 略快 |
+| BPlusTree vs std::map 插入 | B+Tree 更快（~1.4x） |
+| singlyLinkedList vs std::forward_list | 持平 |
+| doublyLinkedList vs std::list | 持平 |
+| UnionFind | O(α(n)) 近乎常数 |
+
+## 更新日志
+
+### 2026-07-07 — v0.2.0 测试与修复
+
+- **修复**: `Tree_BinaryRepresentation` 中迭代器后置 `++` 的类型切片错误
+- **修复**: `Node_MultiChildRepresentation` 中 `child_index()` 的成员函数名错误
+- **修复**: `AVLTree.hpp` / `RBTree.hpp` 友元声明模板参数 shadow 警告
+- **修复**: `BPlusTree.hpp` 析构函数 `~decltype()` 兼容性问题（改用 `std::destroy_at`）
+- **修复**: `Trie.hpp` 中 `get_child_by_char()` 缺少边界检查导致段错误
+- **新增**: 基于 Google Test 的全面测试框架（CMake + FetchContent）
+- **新增**: 513 个测试用例，覆盖所有数据结构的边缘情况
+- **新增**: 性能基准测试，与 STL 容器对比
+- **新增**: CMakeLists.txt 构建系统
+
 ## 许可证
 
 本项目采用 MIT 许可证。详见 LICENSE 文件。
