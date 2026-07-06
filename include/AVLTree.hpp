@@ -54,6 +54,10 @@ namespace TreeNode
     public:
         using value_type = T;
 
+        // 直接获取值的辅助函数，绕开 std::optional 的拆包开销
+        T& get_val() { return *this->data; }
+        const T& get_val() const { return *this->data; }
+
         // 重写基类的递归 height()，变为 O(1) 的缓存读取
         std::size_t height() const { return m_height; }
 
@@ -140,33 +144,38 @@ namespace Tree
         }
 
         // ===== 统一的高度回溯与平衡修复机制 =====
-        // 此函数严格为 O(log N)，从指定节点不断向上计算并旋转直到根部
+        // 优化：缓存子节点指针和高度值，减少重复访问
         void balance_upwards(NodePtr curr)
         {
             while (curr)
             {
-                update_height(curr);
-                int balance = get_balance(curr);
-                NodePtr next_curr = parent(curr); // 默认向上回溯
+                NodePtr lc = left_child(curr);
+                NodePtr rc = right_child(curr);
+                int lh = get_height(lc);
+                int rh = get_height(rc);
+                int new_h = 1 + std::max(lh, rh);
+                curr->set_height(new_h);
+
+                int balance = rh - lh;
+                NodePtr next_curr = parent(curr);
 
                 if (balance > 1) // 右子树过高
                 {
-                    if (get_balance(right_child(curr)) < 0) // RL 型
+                    if (get_balance(rc) < 0) // RL 型
                     {
-                        right_rotate_avl(m_root, right_child(curr));
+                        right_rotate_avl(m_root, rc);
                     }
-                    left_rotate_avl(m_root, curr); // RR/RL共有的左旋
+                    left_rotate_avl(m_root, curr);
 
-                    // 旋转后，原 curr 的父节点变成了新的子树根节点，回溯应该从新的根节点的父节点继续
                     next_curr = parent(parent(curr));
                 }
                 else if (balance < -1) // 左子树过高
                 {
-                    if (get_balance(left_child(curr)) > 0) // LR 型
+                    if (get_balance(lc) > 0) // LR 型
                     {
-                        left_rotate_avl(m_root, left_child(curr));
+                        left_rotate_avl(m_root, lc);
                     }
-                    right_rotate_avl(m_root, curr); // LL/LR共有的右旋
+                    right_rotate_avl(m_root, curr);
 
                     next_curr = parent(parent(curr));
                 }
@@ -244,16 +253,18 @@ namespace Tree
             NodePtr curr = m_root;
             NodePtr p = nullptr;
             bool is_left = false;
+            const T& new_val = new_node->get_val();
 
             while (curr)
             {
                 p = curr;
-                if (m_comp(new_node->value().value().get(), curr->value().value().get()))
+                const T& cur_val = curr->get_val();
+                if (m_comp(new_val, cur_val))
                 {
                     curr = left_child(curr);
                     is_left = true;
                 }
-                else if (m_comp(curr->value().value().get(), new_node->value().value().get()))
+                else if (m_comp(cur_val, new_val))
                 {
                     curr = right_child(curr);
                     is_left = false;
@@ -284,13 +295,14 @@ namespace Tree
 
             while (target)
             {
-                if (m_comp(val, target->value().value().get()))
+                const T& cur_val = target->get_val();
+                if (m_comp(val, cur_val))
                 {
                     parent_of_target = target;
                     target_is_left_child = true;
                     target = left_child(target);
                 }
-                else if (m_comp(target->value().value().get(), val))
+                else if (m_comp(cur_val, val))
                 {
                     parent_of_target = target;
                     target_is_left_child = false;
@@ -413,11 +425,12 @@ namespace Tree
             NodePtr current = m_root;
             while (current)
             {
-                if (m_comp(value, current->value().value().get()))
+                const T& cur_val = current->get_val();
+                if (m_comp(value, cur_val))
                 {
                     current = left_child(current);
                 }
-                else if (m_comp(current->value().value().get(), value))
+                else if (m_comp(cur_val, value))
                 {
                     current = right_child(current);
                 }
@@ -438,7 +451,7 @@ namespace Tree
                 return;
             }
             NodePtr other_root = other.m_root;
-            m_root = this->create_node(other_root->value().value().get(), static_cast<NodePtr>(other_root)->height());
+            m_root = this->create_node(other_root->get_val(), static_cast<NodePtr>(other_root)->height());
             std::stack<std::pair<NodePtr, NodePtr>> stack; // other->this
             stack.push({ static_cast<NodePtr>(other.m_root), m_root });
             while (!stack.empty())
@@ -449,14 +462,14 @@ namespace Tree
                 stack.pop();
                 if (orig->child(1))
                 {
-                    NodePtr rc = this->create_node(orig->child(1)->value().value().get(), static_cast<NodePtr>(orig->child(1))->height());
+                    NodePtr rc = this->create_node(static_cast<NodePtr>(orig->child(1))->get_val(), static_cast<NodePtr>(orig->child(1))->height());
                     copy->set_child(1, rc);
                     rc->set_parent(copy);
                     stack.push({ static_cast<NodePtr>(orig->child(1)), rc });
                 }
                 if (orig->child(0))
                 {
-                    NodePtr lc = this->create_node(orig->child(0)->value().value().get(), static_cast<NodePtr>(orig->child(0))->height());
+                    NodePtr lc = this->create_node(static_cast<NodePtr>(orig->child(0))->get_val(), static_cast<NodePtr>(orig->child(0))->height());
                     copy->set_child(0, lc);
                     lc->set_parent(copy);
                     stack.push({ static_cast<NodePtr>(orig->child(0)), lc });
