@@ -55,8 +55,8 @@ namespace TreeNode
         using value_type = T;
 
         // 直接获取值的辅助函数，绕开 std::optional 的拆包开销
-        [[gnu::always_inline]] T& get_val() { return *this->data; }
-        [[gnu::always_inline]] const T& get_val() const { return *this->data; }
+        ALWAYS_INLINE T& get_val() { return *this->data; }
+        ALWAYS_INLINE const T& get_val() const { return *this->data; }
 
         // 重写基类的递归 height()，变为 O(1) 的缓存读取
         std::size_t height() const { return m_height; }

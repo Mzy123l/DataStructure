@@ -77,42 +77,42 @@ namespace TreeNode
         RBNode(std::in_place_t, Args&&... args) : Base(std::in_place, std::forward<Args>(args)...) {}
 
         // 获取父节点指针 (非const与const版本)
-        [[gnu::always_inline]] NodePtr parent()
+        ALWAYS_INLINE NodePtr parent()
         {
             return reinterpret_cast<NodePtr>(reinterpret_cast<std::uintptr_t>(m_parent) & ~(std::uintptr_t{ 1 }));
         }
-        [[gnu::always_inline]] NodePtr parent() const
+        ALWAYS_INLINE NodePtr parent() const
         {
             return reinterpret_cast<NodePtr>(reinterpret_cast<std::uintptr_t>(m_parent) & ~(std::uintptr_t{ 1 }));
         }
 
         // 设置父节点指针(保留原有颜色)
-        [[gnu::always_inline]] void set_parent(NodePtr ptr)
+        ALWAYS_INLINE void set_parent(NodePtr ptr)
         {
             m_parent = reinterpret_cast<NodePtr>
                 ((reinterpret_cast<std::uintptr_t>(ptr) & ~(std::uintptr_t{ 1 })) | (reinterpret_cast<std::uintptr_t>(m_parent) & 1));
         }
 
         // 获取颜色
-        [[gnu::always_inline]] TreeNode::RBColor color() const
+        ALWAYS_INLINE TreeNode::RBColor color() const
         {
             return static_cast<TreeNode::RBColor>(reinterpret_cast<std::uintptr_t>(m_parent) & 1);
         }
 
         // 设置颜色
-        [[gnu::always_inline]] void set_color(TreeNode::RBColor color)
+        ALWAYS_INLINE void set_color(TreeNode::RBColor color)
         {
             m_parent = reinterpret_cast<NodePtr>((reinterpret_cast<std::uintptr_t>(m_parent) & ~(std::uintptr_t{ 1 })) | static_cast<std::uintptr_t>(color));
         }
 
         // 同时设置父节点指针和颜色
-        [[gnu::always_inline]] void set_parent_and_color(NodePtr parent, TreeNode::RBColor color)
+        ALWAYS_INLINE void set_parent_and_color(NodePtr parent, TreeNode::RBColor color)
         {
             m_parent = reinterpret_cast<NodePtr>((reinterpret_cast<std::uintptr_t>(parent) & ~(std::uintptr_t{ 1 })) | static_cast<std::uintptr_t>(color));
         }
 
-        [[gnu::always_inline]] bool is_red() const { return color() == TreeNode::RBColor::RED; }
-        [[gnu::always_inline]] bool is_black() const { return color() == TreeNode::RBColor::BLACK; }
+        ALWAYS_INLINE bool is_red() const { return color() == TreeNode::RBColor::RED; }
+        ALWAYS_INLINE bool is_black() const { return color() == TreeNode::RBColor::BLACK; }
     };
 }
 

@@ -2,6 +2,17 @@
 #include <optional>
 #include <utility>
 
+// ============================================================
+// 跨平台强制内联宏
+// ============================================================
+#if defined(__GNUC__) || defined(__clang__)
+#define ALWAYS_INLINE __attribute__((always_inline))
+#elif defined(_MSC_VER)
+#define ALWAYS_INLINE __forceinline
+#else
+#define ALWAYS_INLINE
+#endif
+
 namespace TreeNode
 {
 	
