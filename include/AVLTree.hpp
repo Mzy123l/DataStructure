@@ -55,8 +55,8 @@ namespace TreeNode
         using value_type = T;
 
         // 直接获取值的辅助函数，绕开 std::optional 的拆包开销
-        T& get_val() { return *this->data; }
-        const T& get_val() const { return *this->data; }
+        [[gnu::always_inline]] T& get_val() { return *this->data; }
+        [[gnu::always_inline]] const T& get_val() const { return *this->data; }
 
         // 重写基类的递归 height()，变为 O(1) 的缓存读取
         std::size_t height() const { return m_height; }
@@ -144,8 +144,9 @@ namespace Tree
         }
 
         // ===== 统一的高度回溯与平衡修复机制 =====
-        // 优化：缓存子节点指针和高度值，减少重复访问
-        void balance_upwards(NodePtr curr)
+        // is_insert: true=插入（高度只增不减，可提前终止）
+        //            false=删除（高度可能波动，需完整回溯）
+        void balance_upwards(NodePtr curr, bool is_insert = false)
         {
             while (curr)
             {
@@ -153,11 +154,9 @@ namespace Tree
                 NodePtr rc = right_child(curr);
                 int lh = get_height(lc);
                 int rh = get_height(rc);
+                int old_h = static_cast<int>(curr->height());
                 int new_h = 1 + std::max(lh, rh);
-                curr->set_height(new_h);
-
                 int balance = rh - lh;
-                NodePtr next_curr = parent(curr);
 
                 if (balance > 1) // 右子树过高
                 {
@@ -166,8 +165,9 @@ namespace Tree
                         right_rotate_avl(m_root, rc);
                     }
                     left_rotate_avl(m_root, curr);
-
-                    next_curr = parent(parent(curr));
+                    // 旋转后子树高度恢复到插入前的值，父节点不受影响
+                    if (is_insert) return;
+                    curr = parent(parent(curr));
                 }
                 else if (balance < -1) // 左子树过高
                 {
@@ -176,11 +176,16 @@ namespace Tree
                         left_rotate_avl(m_root, lc);
                     }
                     right_rotate_avl(m_root, curr);
-
-                    next_curr = parent(parent(curr));
+                    if (is_insert) return;
+                    curr = parent(parent(curr));
                 }
-
-                curr = next_curr;
+                else
+                {
+                    curr->set_height(new_h);
+                    // 插入优化：高度不变则提前终止
+                    if (is_insert && new_h == old_h) return;
+                    curr = parent(curr);
+                }
             }
         }
 
@@ -282,7 +287,7 @@ namespace Tree
             ++m_size;
 
             // 自底向上维护高度与平衡
-            balance_upwards(p);
+            balance_upwards(p, true);  // 插入路径：可提前终止
             return true;
         }
 

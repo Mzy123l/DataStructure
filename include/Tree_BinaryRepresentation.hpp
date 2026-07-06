@@ -508,37 +508,37 @@ namespace Tree
 
 	protected:
 		// 获得左孩子 - 静态版本
-		static NodePtr left_child(NodePtr node)
+		[[gnu::always_inline]] static NodePtr left_child(NodePtr node)
 		{
 			return static_cast<NodePtr>(node->child(0));
 		}
 
 		// 获得右孩子 - 静态版本
-		static NodePtr right_child(NodePtr node)
+		[[gnu::always_inline]] static NodePtr right_child(NodePtr node)
 		{
 			return static_cast<NodePtr>(node->child(1));
 		}
 
 		// 设置左孩子 - 静态版本
-		static void set_lchild(NodePtr node, NodePtr child)
+		[[gnu::always_inline]] static void set_lchild(NodePtr node, NodePtr child)
 		{
 			node->set_child(0, child);
 		}
 
 		// 设置右孩子 - 静态版本
-		static void set_rchild(NodePtr node, NodePtr child)
+		[[gnu::always_inline]] static void set_rchild(NodePtr node, NodePtr child)
 		{
 			node->set_child(1, child);
 		}
 
 		// 获取父节点 - 静态版本
-		static NodePtr parent(NodePtr node)
+		[[gnu::always_inline]] static NodePtr parent(NodePtr node)
 		{
 			return static_cast<NodePtr>(node->parent());
 		}
 
 		// 设置父节点 - 静态版本
-		static void set_parent(NodePtr node, NodePtr parent)
+		[[gnu::always_inline]] static void set_parent(NodePtr node, NodePtr parent)
 		{
 			node->set_parent(parent);
 		}
