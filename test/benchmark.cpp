@@ -330,12 +330,13 @@ TEST(Benchmark, Trie_Performance)
         words.push_back(w);
     }
 
+    std::cout << "  Trie (sparse, default):" << std::endl;
     {
         Tree::Trie<char> trie;
         Timer t;
         for (auto& w : words) trie.insert(w);
         double ms = t.elapsed_ms();
-        std::cout << "  Trie   insert " << trie.words_count() << " words: " << ms << " ms" << std::endl;
+        std::cout << "    insert " << trie.words_count() << " words: " << ms << " ms" << std::endl;
     }
     {
         Tree::Trie<char> trie;
@@ -345,7 +346,26 @@ TEST(Benchmark, Trie_Performance)
         for (auto& w : words)
             if (trie.search(w)) ++found;
         double ms = t.elapsed_ms();
-        std::cout << "  Trie   search " << words.size() << " words (" << found << " hits): " << ms << " ms" << std::endl;
+        std::cout << "    search " << words.size() << " words (" << found << " hits): " << ms << " ms" << std::endl;
+    }
+
+    std::cout << "  Trie (dense, alphanumeric):" << std::endl;
+    {
+        Tree::AlphanumericTrie<char> trie;
+        Timer t;
+        for (auto& w : words) trie.insert(w);
+        double ms = t.elapsed_ms();
+        std::cout << "    insert " << trie.words_count() << " words: " << ms << " ms" << std::endl;
+    }
+    {
+        Tree::AlphanumericTrie<char> trie;
+        for (auto& w : words) trie.insert(w);
+        Timer t;
+        int found = 0;
+        for (auto& w : words)
+            if (trie.search(w)) ++found;
+        double ms = t.elapsed_ms();
+        std::cout << "    search " << words.size() << " words (" << found << " hits): " << ms << " ms" << std::endl;
     }
 }
 

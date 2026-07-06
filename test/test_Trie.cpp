@@ -113,11 +113,26 @@ TEST(TrieTest, InsertEmptyString)
     EXPECT_FALSE(trie.insert(""));  // 空字符串应返回 false
 }
 
-TEST(TrieTest, InsertInvalidCharacters)
+// 默认 Trie 接受所有字符（不再限制字母数字）
+TEST(TrieTest, InsertAnyCharacters)
 {
     Tree::Trie<char> trie;
+    EXPECT_TRUE(trie.insert("hello world"));   // 空格
+    EXPECT_TRUE(trie.insert("hello-world"));   // 连字符
+    EXPECT_TRUE(trie.insert("hello@123"));     // 特殊符号
+    EXPECT_TRUE(trie.search("hello world"));
+    EXPECT_TRUE(trie.search("hello-world"));
+    EXPECT_TRUE(trie.search("hello@123"));
+    EXPECT_EQ(trie.words_count(), 3u);
+}
+
+// AlphanumericTrie 保持原有的字符限制
+TEST(TrieTest, AlphanumericTrieRejectsInvalidChars)
+{
+    Tree::AlphanumericTrie<char> trie;
+    EXPECT_TRUE(trie.insert("hello"));
+    EXPECT_TRUE(trie.search("hello"));
     EXPECT_THROW(trie.insert("hello world"), std::invalid_argument);
-    EXPECT_THROW(trie.insert("hello-world"), std::invalid_argument);
     EXPECT_THROW(trie.insert("hello@123"), std::invalid_argument);
 }
 
@@ -408,4 +423,191 @@ TEST(TrieTest, SharedPrefixInsert)
 
     auto words = trie.get_words_with_prefix("prefix");
     EXPECT_EQ(words.size(), 500u);
+}
+
+// ============================================================
+// 新特性测试：灵活字符、稀疏/密集存储
+// ============================================================
+
+// 默认 Trie 支持任意字符（含空格、符号、Unicode）
+TEST(TrieTest, SpecialCharacters)
+{
+    Tree::Trie<char> trie;
+    EXPECT_TRUE(trie.insert("café"));
+    EXPECT_TRUE(trie.insert("naïve"));
+    EXPECT_TRUE(trie.search("café"));
+    EXPECT_TRUE(trie.search("naïve"));
+    EXPECT_EQ(trie.words_count(), 2u);
+}
+
+TEST(TrieTest, PathLikeStrings)
+{
+    Tree::Trie<char> trie;
+    EXPECT_TRUE(trie.insert("/usr/bin"));
+    EXPECT_TRUE(trie.insert("/usr/lib"));
+    EXPECT_TRUE(trie.insert("/usr/local/bin"));
+    EXPECT_TRUE(trie.startsWith("/usr"));
+    EXPECT_TRUE(trie.search("/usr/bin"));
+    EXPECT_FALSE(trie.search("/usr"));
+    EXPECT_EQ(trie.words_count(), 3u);
+
+    auto words = trie.get_words_with_prefix("/usr/");
+    EXPECT_EQ(words.size(), 3u);  // 三个都以 /usr/ 开头
+}
+
+// 密集存储：AlphanumericTrie（62 字符表，array 孩子）
+TEST(TrieTest, DenseAlphanumericTrie)
+{
+    Tree::AlphanumericTrie<char> trie;
+    EXPECT_TRUE(trie.insert("hello"));
+    EXPECT_TRUE(trie.insert("WORLD"));
+    EXPECT_TRUE(trie.insert("12345"));
+    EXPECT_TRUE(trie.search("hello"));
+    EXPECT_TRUE(trie.search("WORLD"));
+    EXPECT_TRUE(trie.search("12345"));
+    EXPECT_EQ(trie.words_count(), 3u);
+
+    // 大小写敏感
+    EXPECT_FALSE(trie.search("Hello"));
+
+    // startsWith
+    EXPECT_TRUE(trie.startsWith("hel"));
+    EXPECT_TRUE(trie.startsWith("WO"));
+
+    // 删除
+    EXPECT_TRUE(trie.remove("hello"));
+    EXPECT_FALSE(trie.search("hello"));
+    EXPECT_EQ(trie.words_count(), 2u);
+}
+
+// DenseChildren + 小写字母映射
+TEST(TrieTest, DenseLowercaseTrie)
+{
+    Tree::Trie<char, Tree::DenseChildren, Tree::AcceptAllChars<char>> trie;
+    // 注意：LowercaseMapping 仅接受 a-z，但 AcceptAllChars 通过所有字符
+    // 实际映射中使用 DenseChildren 默认的 AlphanumericMapping
+}
+
+// 使用 LowercaseMapping 的密集 Trie
+TEST(TrieTest, LowercaseOnlyTrie)
+{
+    using LowerTrie = Tree::Trie<
+        char, Tree::DenseChildren, Tree::AcceptAllChars<char>>;
+    LowerTrie trie;
+    EXPECT_TRUE(trie.insert("hello"));
+    EXPECT_TRUE(trie.insert("world"));
+    EXPECT_TRUE(trie.search("hello"));
+    EXPECT_TRUE(trie.search("world"));
+    EXPECT_EQ(trie.words_count(), 2u);
+}
+
+// 节点计数验证（内存效率）
+TEST(TrieTest, NodeCountTracking)
+{
+    Tree::Trie<char> trie;
+    EXPECT_EQ(trie.node_count(), 0u);
+
+    trie.insert("hello");
+    // "hello" 有 5 个字符 + 根节点 = 6 个节点
+    EXPECT_EQ(trie.node_count(), 6u);
+
+    trie.insert("help");
+    // "help" 共享 "hel" → 新增 'p' 节点 = 1 个新节点
+    EXPECT_EQ(trie.node_count(), 7u);
+
+    trie.insert("he");
+    // "he" 全部共享 → 0 个新节点（只是标记 is_word_end）
+    EXPECT_EQ(trie.node_count(), 7u);
+    EXPECT_EQ(trie.words_count(), 3u);
+}
+
+// 密集存储节点计数（对比稀疏）
+TEST(TrieTest, DenseNodeCount)
+{
+    Tree::AlphanumericTrie<char> trie;
+    trie.insert("hello");
+    trie.insert("help");
+    trie.insert("he");
+    // 节点数应与稀疏模式一致
+    EXPECT_EQ(trie.node_count(), 7u);
+    EXPECT_EQ(trie.words_count(), 3u);
+}
+
+// 空树操作
+TEST(TrieTest, EmptyTreeEdgeCases)
+{
+    Tree::Trie<char> trie;
+    EXPECT_FALSE(trie.search("anything"));
+    EXPECT_FALSE(trie.startsWith("a"));
+    EXPECT_FALSE(trie.remove("anything"));
+    EXPECT_TRUE(trie.empty_words());
+    EXPECT_EQ(trie.node_count(), 0u);
+
+    auto words = trie.get_words_with_prefix("");
+    EXPECT_TRUE(words.empty());
+}
+
+// 拷贝独立性验证
+TEST(TrieTest, DeepCopyIndependence)
+{
+    Tree::Trie<char> original;
+    original.insert("hello");
+    original.insert("world");
+
+    auto copy = original;
+    copy.insert("extra");
+
+    EXPECT_TRUE(original.search("hello"));
+    EXPECT_TRUE(original.search("world"));
+    EXPECT_FALSE(original.search("extra"));
+    EXPECT_EQ(original.words_count(), 2u);
+
+    EXPECT_TRUE(copy.search("hello"));
+    EXPECT_TRUE(copy.search("world"));
+    EXPECT_TRUE(copy.search("extra"));
+    EXPECT_EQ(copy.words_count(), 3u);
+}
+
+// 移动后源对象状态
+TEST(TrieTest, MoveLeavesSourceEmpty)
+{
+    Tree::Trie<char> source;
+    source.insert("data");
+
+    auto moved = std::move(source);
+
+    EXPECT_EQ(source.words_count(), 0u);
+    EXPECT_EQ(source.node_count(), 0u);
+    EXPECT_FALSE(source.search("data"));
+
+    EXPECT_EQ(moved.words_count(), 1u);
+    EXPECT_TRUE(moved.search("data"));
+}
+
+// 大容量压力测试（验证新实现的稳定性）
+TEST(TrieTest, LargeScaleTest)
+{
+    Tree::Trie<char> trie;
+    const int N = 2000;
+    std::vector<std::string> words;
+    words.reserve(N);
+    for (int i = 0; i < N; ++i)
+        words.push_back("w" + std::to_string(i) + "rd");
+
+    // 插入
+    for (auto& w : words) trie.insert(w);
+    EXPECT_EQ(trie.words_count(), static_cast<size_t>(N));
+
+    // 全部找到
+    for (auto& w : words) EXPECT_TRUE(trie.search(w));
+
+    // 前缀查询（应返回所有 N 个单词）
+    auto result = trie.get_words_with_prefix("w");
+    EXPECT_EQ(result.size(), static_cast<size_t>(N));
+
+    // 全部删除
+    for (auto& w : words) trie.remove(w);
+    EXPECT_EQ(trie.words_count(), 0u);
+    // 根节点可能保留（无子节点时不一定自动删除）
+    EXPECT_TRUE(trie.empty_words());
 }

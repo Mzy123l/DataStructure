@@ -1,468 +1,574 @@
 #pragma once
-#include "Tree_MultiChildRepresentation.hpp"
-#include <unordered_map>
-#include <string>
-#include <utility>
-#include <stack>
+
+#include <array>
+#include <cstddef>
+#include <memory>
 #include <queue>
+#include <stack>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace Tree
 {
-	/*
-	*  @brief	前缀树/字典树
-	*  @brief	支持大小写字母+数字
-	*/
-	template <typename charT, typename Allocator = std::allocator<charT>>
-	class Trie : public Tree_MultiChildRepresentation<
-		charT,
-		Trie<charT, Allocator>,
-		// 从 charT 分配器 rebind 到节点分配器
-		typename std::allocator_traits<Allocator>::template rebind_alloc<
-		TreeNode::Node_MultiChildRepresentation<charT>
-		>
-	>
-	{
-	private:
-		// 基类类型定义
-		using Base = Tree_MultiChildRepresentation<
-			charT,
-			Trie<charT, Allocator>,
-			typename std::allocator_traits<Allocator>::template rebind_alloc<
-			TreeNode::Node_MultiChildRepresentation<charT>
-			>
-		>;
-		using Node = typename Base::Node;
-		using NodePtr = typename Base::NodePtr;
-		using const_NodePtr = typename Base::const_NodePtr;
 
-		// 从 charT 分配器 rebind 到映射表元素分配器
-		using MapAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<
-			std::pair<const NodePtr, bool>
-		>;
+// ============================================================
+// 跨平台强制内联宏（若未定义）
+// ============================================================
+#ifndef ALWAYS_INLINE
+#if defined(__GNUC__) || defined(__clang__)
+#define ALWAYS_INLINE __attribute__((always_inline))
+#elif defined(_MSC_VER)
+#define ALWAYS_INLINE __forceinline
+#else
+#define ALWAYS_INLINE
+#endif
+#endif
 
-		// 使用自定义分配器的 unordered_map
-		using WordEndMap = std::unordered_map<
-			NodePtr,
-			bool,
-			std::hash<NodePtr>,
-			std::equal_to<NodePtr>,
-			MapAlloc
-		>;
+// ============================================================
+// 字母表映射（供 DenseChildren 使用）
+// ============================================================
 
-		static constexpr size_t ALPHABET_SIZE = 62;  // 0-9, A-Z, a-z
+// 默认：数字 + 大小写字母 (0-9, A-Z, a-z)
+template <typename charT>
+struct AlphanumericMapping
+{
+    static constexpr size_t alphabet_size = 62;
 
-		// 字符到索引的映射
-		static constexpr size_t char_to_index(charT ch) noexcept
-		{
-			if (ch >= '0' && ch <= '9')
-				return ch - '0';                     // 0-9: 0-9
-			else if (ch >= 'A' && ch <= 'Z')
-				return 10 + (ch - 'A');              // A-Z: 10-35
-			else  // ch >= 'a' && ch <= 'z'
-				return 36 + (ch - 'a');              // a-z: 36-61
-		}
+    ALWAYS_INLINE static constexpr size_t to_index(charT ch) noexcept
+    {
+        if (ch >= '0' && ch <= '9') return ch - '0';
+        if (ch >= 'A' && ch <= 'Z') return 10 + (ch - 'A');
+        return 36 + (ch - 'a');
+    }
 
-		// 是否是有效字符
-		static constexpr bool is_valid_char(charT ch) noexcept
-		{
-			return (ch >= '0' && ch <= '9') ||
-				(ch >= 'A' && ch <= 'Z') ||
-				(ch >= 'a' && ch <= 'z');
-		}
+    ALWAYS_INLINE static constexpr bool is_valid(charT ch) noexcept
+    {
+        return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') ||
+               (ch >= 'a' && ch <= 'z');
+    }
 
-		// 内部辅助函数：根据字符获取子节点，如果不存在则返回nullptr
-		NodePtr get_child_by_char(NodePtr node, charT ch) const
-		{
-			if (!node || !is_valid_char(ch)) return nullptr;
-			size_t idx = char_to_index(ch);
-			// 边界检查：节点可能未扩容到 ALPHABET_SIZE
-			if (idx >= node->child_count()) return nullptr;
-			return node->child(idx);
-		}
+    ALWAYS_INLINE static constexpr charT to_char(size_t idx) noexcept
+    {
+        if (idx < 10) return static_cast<charT>('0' + idx);
+        if (idx < 36) return static_cast<charT>('A' + (idx - 10));
+        return static_cast<charT>('a' + (idx - 36));
+    }
+};
 
-		// 内部辅助函数：设置节点的子节点（根据字符）
-		void set_child_by_char(NodePtr parent, charT ch, NodePtr child)
-		{
-			if (!parent || !is_valid_char(ch)) return;
-			size_t idx = char_to_index(ch);
+// 小写字母映射
+template <typename charT>
+struct LowercaseMapping
+{
+    static constexpr size_t alphabet_size = 26;
 
-			parent->set_child(idx, child);
-		}
+    ALWAYS_INLINE static constexpr size_t to_index(charT ch) noexcept
+    {
+        return ch - 'a';
+    }
 
-		// 内部辅助函数：遍历到指定字符串的最后一个字符节点
-		NodePtr traverse_to_node(const std::basic_string<charT>& str) const
-		{
-			if (!this->m_root) return nullptr;
-			NodePtr current = this->m_root;
-			for (charT ch : str)
-			{
-				if (!is_valid_char(ch)) return nullptr;
-				current = get_child_by_char(current, ch);
-				if (!current) return nullptr;
-			}
-			return current;
-		}
+    ALWAYS_INLINE static constexpr bool is_valid(charT ch) noexcept
+    {
+        return ch >= 'a' && ch <= 'z';
+    }
 
-		// 内部辅助函数：收集从某个节点开始的所有单词
-		void collect_words(NodePtr node, std::basic_string<charT> current_prefix,
-			std::vector<std::basic_string<charT>>& result) const
-		{
-			if (!node) return;
-			// 如果当前节点是一个单词的结尾
-			if (word_end_map.contains(node) && word_end_map.at(node))
-			{
-				result.push_back(current_prefix);
-			}
-			// 遍历所有可能的子节点
-			for (size_t i = 0; i < node->child_count(); ++i)
-			{
-				NodePtr child = node->child(i);
-				if (child)
-				{
-					auto opt_ref = child->value();
-					if (opt_ref)
-					{
-						charT ch = opt_ref.value().get();
-						collect_words(child, current_prefix + ch, result);
-					}
-				}
-			}
-		}
+    ALWAYS_INLINE static constexpr charT to_char(size_t idx) noexcept
+    {
+        return static_cast<charT>('a' + idx);
+    }
+};
 
-		// 深度拷贝整个Trie树
-		void deep_copy(const Trie& other)
-		{
-			if (!other.m_root)
-			{
-				this->m_root = nullptr;
-				this->m_size = 0;
-				word_count = 0;
-				word_end_map.clear();
-				return;
-			}
+// DNA 碱基映射 (A/C/G/T)
+template <typename charT>
+struct DNAMapping
+{
+    static constexpr size_t alphabet_size = 4;
 
-			// 用于层序遍历的两个队列
-			std::queue<const_NodePtr> src_queue;
-			std::queue<NodePtr> new_queue;
+    ALWAYS_INLINE static constexpr size_t to_index(charT ch) noexcept
+    {
+        switch (ch)
+        {
+        case 'A': case 'a': return 0;
+        case 'C': case 'c': return 1;
+        case 'G': case 'g': return 2;
+        case 'T': case 't': return 3;
+        default: return 0;
+        }
+    }
 
-			// 创建根节点
-			this->m_root = this->create_node(charT{});
-			this->m_size = 1;
-			word_count = other.word_count;
+    ALWAYS_INLINE static constexpr bool is_valid(charT ch) noexcept
+    {
+        return ch == 'A' || ch == 'a' || ch == 'C' || ch == 'c' ||
+               ch == 'G' || ch == 'g' || ch == 'T' || ch == 't';
+    }
 
-			// 建立原节点到新节点的映射
-			std::unordered_map<const_NodePtr, NodePtr> node_map;
-			node_map[other.m_root] = this->m_root;
+    ALWAYS_INLINE static constexpr charT to_char(size_t idx) noexcept
+    {
+        constexpr charT chars[] = {'A', 'C', 'G', 'T'};
+        return chars[idx];
+    }
+};
 
-			src_queue.push(other.m_root);
-			new_queue.push(this->m_root);
+// ============================================================
+// 字符过滤器
+// ============================================================
 
-			while (!src_queue.empty())
-			{
-				const_NodePtr old_node = src_queue.front();
-				src_queue.pop();
+template <typename charT>
+struct AcceptAllChars
+{
+    ALWAYS_INLINE static constexpr bool is_valid(charT) noexcept
+    {
+        return true;
+    }
+};
 
-				NodePtr new_node = new_queue.front();
-				new_queue.pop();
+template <typename charT>
+struct AlphanumericFilter
+{
+    ALWAYS_INLINE static constexpr bool is_valid(charT ch) noexcept
+    {
+        return AlphanumericMapping<charT>::is_valid(ch);
+    }
+};
 
-				// 调整新节点的子节点向量大小为ALPHABET_SIZE
-				this->resize(new_node, ALPHABET_SIZE);
+// ============================================================
+// 存储策略：稀疏（hash map）与密集（array）
+// ============================================================
 
-				// 遍历所有可能的子节点
-				for (size_t i = 0; i < ALPHABET_SIZE; ++i)
-				{
-					const_NodePtr old_child = nullptr;
-					// 由于旧树的节点可能有62个子节点槽位，我们尝试访问
-					// 注意：old_node->child(i)可能会越界，因为old_node的子节点向量可能没有62个槽位
-					if (i < old_node->child_count())
-					{
-						old_child = old_node->child(i);
-					}
+// 稀疏存储 — 内存友好，支持任意字符集
+template <typename charT, typename NodePtr>
+class SparseChildren
+{
+public:
+    ALWAYS_INLINE NodePtr get(charT ch) const
+    {
+        auto it = map_.find(ch);
+        return it != map_.end() ? it->second : nullptr;
+    }
 
-					if (old_child)
-					{
-						// 创建新子节点
-						charT ch = charT{};
-						auto opt_ref = old_child->value();
-						if (opt_ref)
-						{
-							ch = opt_ref.value().get();
-						}
+    ALWAYS_INLINE void set(charT ch, NodePtr node) { map_[ch] = node; }
 
-						NodePtr new_child = this->create_node(ch);
-						new_node->set_child(i, new_child);
-						++(this->m_size);
+    ALWAYS_INLINE void erase(charT ch) { map_.erase(ch); }
 
-						// 记录映射
-						node_map[old_child] = new_child;
+    ALWAYS_INLINE bool is_leaf() const noexcept { return map_.empty(); }
 
-						// 入队继续处理
-						src_queue.push(old_child);
-						new_queue.push(new_child);
-					}
-					else
-					{
-						// 确保这个位置是nullptr
-						new_node->set_child(i, nullptr);
-					}
-				}
-			}
+    template <typename Func>
+    void for_each(Func&& f) const
+    {
+        for (const auto& [ch, child] : map_)
+            f(ch, child);
+    }
 
-			// 重建word_end_map
-			word_end_map.clear();
-			for (const auto& [old_node, is_word_end] : other.word_end_map)
-			{
-				if (is_word_end)
-				{
-					auto it = node_map.find(old_node);
-					if (it != node_map.end())
-					{
-						word_end_map[it->second] = true;
-					}
-				}
-			}
-		}
+private:
+    std::unordered_map<charT, NodePtr> map_;
+};
 
-		// 单词计数
-		size_t word_count = 0;
-		// 是否是末尾节点 - 使用自定义分配器的 unordered_map
-		WordEndMap word_end_map;
+// 密集存储 — 无哈希开销，O(1)，需指定字母表映射
+template <typename charT, typename NodePtr,
+          typename Mapping = AlphanumericMapping<charT>>
+class DenseChildren
+{
+public:
+    static constexpr size_t N = Mapping::alphabet_size;
 
-	public:
+    DenseChildren() { arr_.fill(nullptr); }
 
-		// 默认构造函数
-		Trie(const Allocator& alloc = Allocator())
-			: Base(typename Base::allocator_type(alloc))  // 传递给基类的节点分配器
-			, word_end_map(0,
-				typename WordEndMap::hasher(),     // 哈希函数对象
-				typename WordEndMap::key_equal(),      // 相等比较函数对象
-				MapAlloc(alloc))               // 从 charT 分配器构造 map 的分配器
-		{}
+    ALWAYS_INLINE NodePtr get(charT ch) const
+    {
+        if (!Mapping::is_valid(ch)) return nullptr;
+        return arr_[Mapping::to_index(ch)];
+    }
 
-		// 拷贝构造
-		Trie(const Trie& other)
-			: Base(other.get_allocator())  // 先创建空树
-			, word_end_map(0,
-				typename WordEndMap::hasher(),
-				typename WordEndMap::key_equal(),
-				MapAlloc(other.get_allocator()))
-		{
-			// 深度拷贝
-			deep_copy(other);
-		}
+    ALWAYS_INLINE void set(charT ch, NodePtr node)
+    {
+        arr_[Mapping::to_index(ch)] = node;
+    }
 
-		// 拷贝赋值
-		Trie& operator=(const Trie& other)
-		{
-			if (this != &other)
-			{
-				// 清理当前树
-				this->clear();
-				word_end_map.clear();
-				word_count = 0;
+    ALWAYS_INLINE void erase(charT ch)
+    {
+        arr_[Mapping::to_index(ch)] = nullptr;
+    }
 
-				// 深度拷贝
-				deep_copy(other);
-			}
-			return *this;
-		}
+    ALWAYS_INLINE bool is_leaf() const noexcept
+    {
+        for (size_t i = 0; i < N; ++i)
+            if (arr_[i]) return false;
+        return true;
+    }
 
-		// 移动构造
-		Trie(Trie&& other) noexcept
-			: Base(std::move(other))
-			, word_count(other.word_count)
-			, word_end_map(std::move(other.word_end_map))
-		{
-			other.word_count = 0;
-		}
+    // 回调接收 (charT, NodePtr)
+    template <typename Func>
+    void for_each(Func&& f) const
+    {
+        for (size_t i = 0; i < N; ++i)
+            if (arr_[i]) f(Mapping::to_char(i), arr_[i]);
+    }
 
-		// 移动赋值
-		Trie& operator=(Trie&& other) noexcept
-		{
-			if (this != &other)
-			{
-				Base::operator=(std::move(other));
-				word_end_map = std::move(other.word_end_map);
-				word_count = other.word_count;
-				other.word_count = 0;
-			}
-			return *this;
-		}
+private:
+    std::array<NodePtr, N> arr_;
+};
 
-		// 析构函数交给基类
-		~Trie() = default;
+// ============================================================
+// Trie 前缀树（优化版）
+// ============================================================
+// 模板参数:
+//   charT        - 字符类型（默认 char）
+//   StoragePolicy - 子节点存储策略模板（SparseChildren 或 DenseChildren）
+//   CharFilter   - 字符验证器
+//   Allocator    - 底层分配器
+// ============================================================
+template <typename charT = char,
+          template <typename, typename> class StoragePolicy = SparseChildren,
+          typename CharFilter = AcceptAllChars<charT>,
+          typename Allocator = std::allocator<charT>>
+class Trie
+{
+private:
+    // 前向声明节点类型
+    struct TrieNode;
+    using NodePtr = TrieNode*;
 
-		/**
-		 * @brief 插入单词
-		 * 时间复杂度: O(L)，其中L是单词长度
-		 */
-		bool insert(const std::basic_string<charT>& word)
-		{
-			if (word.empty()) return false;
-			// 确保根节点存在
-			if (!this->m_root)
-			{
-				this->m_root = this->create_node(charT{});
-				this->m_size = 1;
-			}
+    // 具体存储类型
+    using ChildrenStorage = StoragePolicy<charT, NodePtr>;
 
-			NodePtr current = this->m_root;
+    struct TrieNode
+    {
+        ChildrenStorage children;
+        bool is_word_end = false;
+    };
 
-			for (charT ch : word)
-			{
-				if (!is_valid_char(ch))
-				{
-					throw std::invalid_argument("Invalid character. Only alphanumeric characters allowed.");
-				}
-				size_t index = char_to_index(ch);
-				this->resize(current, 62);
-				NodePtr child = get_child_by_char(current, ch);
-				if (!child)
-				{
-					// 创建新节点
-					child = this->create_node(ch);
-					set_child_by_char(current, ch, child);
-					++(this->m_size);
-				}
-				current = child;
-			}
+    // 节点分配器
+    using NodeAlloc = typename std::allocator_traits<
+        Allocator>::template rebind_alloc<TrieNode>;
+    using AllocTraits = std::allocator_traits<NodeAlloc>;
 
-			if (word_end_map.contains(current) && word_end_map[current])
-				return false;
+public:
+    // ============================================================
+    // 构造 / 析构 / 拷贝 / 移动
+    // ============================================================
+    Trie() : node_alloc_(Allocator()) {}
 
-			++word_count;
-			word_end_map[current] = true;
-			return true;
-		}
+    explicit Trie(const Allocator& alloc) : node_alloc_(alloc) {}
 
-		/*
-		* @brief 搜索单词是否存在
-		* 时间复杂度: O(L)
-		* @param word 要搜索的单词
-		* @return true 如果单词存在，false 否则
-		*/
-		bool search(const std::basic_string<charT>& word) const
-		{
-			NodePtr node = traverse_to_node(word);
-			return node != nullptr && word_end_map.contains(node) && word_end_map.at(node);
-		}
+    Trie(const CharFilter&, const Allocator& alloc = Allocator())
+        : node_alloc_(alloc)
+    {}
 
-		/**
-		* @brief 检查是否有以给定前缀开头的单词
-		* 时间复杂度: O(P)，其中P是前缀长度
-		* @param prefix 要检查的前缀
-		* @return true 如果存在至少一个单词以该前缀开头，false 否则
-		*/
-		bool startsWith(const std::basic_string<charT>& prefix) const
-		{
-			return traverse_to_node(prefix) != nullptr;
-		}
+    Trie(const Trie& other)
+        : node_alloc_(AllocTraits::select_on_container_copy_construction(
+              other.node_alloc_))
+    {
+        deep_copy(other);
+    }
 
-		/*
-		* @brief 从Trie中删除一个单词
-		* 时间复杂度: O(L)，但最坏情况可能需要回溯删除节点
-		* @param word 要删除的单词
-		* @return true 如果单词存在并被删除，false 如果单词不存在
-		*/
-		bool remove(const std::basic_string<charT>& word)
-		{
-			if (word.empty() || !this->m_root) return false;
+    Trie& operator=(const Trie& other)
+    {
+        if (this != &other)
+        {
+            clear();
+            node_alloc_ = AllocTraits::select_on_container_copy_construction(
+                other.node_alloc_);
+            deep_copy(other);
+        }
+        return *this;
+    }
 
-			std::stack<std::pair<NodePtr, charT>> path; // 存储节点及其进入的字符
-			NodePtr current = this->m_root;
+    Trie(Trie&& other) noexcept
+        : root_(other.root_)
+        , word_count_(other.word_count_)
+        , node_count_(other.node_count_)
+        , node_alloc_(std::move(other.node_alloc_))
+    {
+        other.root_ = nullptr;
+        other.word_count_ = 0;
+        other.node_count_ = 0;
+    }
 
-			// 1. 查找单词路径
-			for (charT ch : word)
-			{
-				if (!is_valid_char(ch)) return false;
-				NodePtr child = get_child_by_char(current, ch);
-				if (!child)
-				{
-					return false; // 单词不存在
-				}
-				path.push({ current, ch });
-				current = child;
-			}
+    Trie& operator=(Trie&& other) noexcept
+    {
+        if (this != &other)
+        {
+            clear();
+            root_ = other.root_;
+            word_count_ = other.word_count_;
+            node_count_ = other.node_count_;
+            node_alloc_ = std::move(other.node_alloc_);
+            other.root_ = nullptr;
+            other.word_count_ = 0;
+            other.node_count_ = 0;
+        }
+        return *this;
+    }
 
-			// 2. 检查是否是单词结尾
-			if (!word_end_map.contains(current) || !word_end_map[current])
-			{
-				return false; // 不是完整单词
-			}
+    ~Trie() { clear(); }
 
-			// 3. 移除单词结尾标记
-			word_end_map[current] = false;
-			// 如果这个节点还有其他"后代单词"或者有子节点，则不能删除节点
-			bool can_delete_node = current->is_leaf(); // 首先检查是否是叶子节点
+    // ============================================================
+    // 插入单词
+    // ============================================================
+    bool insert(const std::basic_string<charT>& word)
+    {
+        if (word.empty()) return false;
 
-			// 4. 回溯，删除不必要的节点
-			if (can_delete_node)
-			{
-				// 从最后一个字符节点开始回溯
-				while (!path.empty())
-				{
-					auto [parent, ch] = path.top();
-					path.pop();
+        if (!root_) root_ = create_node();
 
-					// 断开链接
-					set_child_by_char(parent, ch, nullptr);
-					this->destroy_node(current); // 销毁当前节点
-					--(this->m_size);
+        NodePtr current = root_;
+        for (charT ch : word)
+        {
+            if (!CharFilter::is_valid(ch))
+            {
+                throw std::invalid_argument(
+                    "Trie::insert: invalid character");
+            }
+            NodePtr child = current->children.get(ch);
+            if (!child)
+            {
+                child = create_node();
+                current->children.set(ch, child);
+            }
+            current = child;
+        }
 
-					// 更新current为parent，继续检查parent是否可删
-					current = parent;
+        if (current->is_word_end) return false;
+        current->is_word_end = true;
+        ++word_count_;
+        return true;
+    }
 
-					// 如果parent是其他单词的结尾，或者parent还有别的子节点，则停止删除
-					if ((word_end_map.contains(current) && word_end_map[current]) || !current->is_leaf())
-					{
-						break;
-					}
-				}
-			}
-			--word_count;
-			return true;
-		}
+    // ============================================================
+    // 搜索单词
+    // ============================================================
+    bool search(const std::basic_string<charT>& word) const
+    {
+        NodePtr node = traverse(word);
+        return node && node->is_word_end;
+    }
 
-		/**
-		* @brief 获取Trie中存储的单词数量
-		*/
-		std::size_t words_count() const
-		{
-			return word_count;
-		}
+    // ============================================================
+    // 前缀匹配
+    // ============================================================
+    bool startsWith(const std::basic_string<charT>& prefix) const
+    {
+        return traverse(prefix) != nullptr;
+    }
 
-		/**
-		* @brief 检查Trie是否为空（无单词）
-		*/
-		bool empty_words() const
-		{
-			return word_count == 0;
-		}
+    // ============================================================
+    // 删除单词
+    // ============================================================
+    bool remove(const std::basic_string<charT>& word)
+    {
+        if (word.empty() || !root_) return false;
 
-		/**
-		 * @brief 清空Trie中的所有单词和节点
-		 */
-		void clear()
-		{
-			Base::clear(); // 调用基类的clear，释放所有节点
-			word_end_map.clear();
-			word_count = 0;
-		}
+        std::stack<std::pair<NodePtr, charT>> path;
+        NodePtr current = root_;
 
-		/**
-		* @brief 获取所有以给定前缀开头的单词
-		* @param prefix 前缀
-		* @return 包含所有匹配单词的向量
-		*/
-		std::vector<std::basic_string<charT>> get_words_with_prefix(const std::basic_string<charT>& prefix) const
-		{
-			std::vector<std::basic_string<charT>> result;
-			NodePtr start_node = traverse_to_node(prefix);
-			if (start_node)
-			{
-				collect_words(start_node, prefix, result);
-			}
-			return result;
-		}
-	};
-}
+        for (charT ch : word)
+        {
+            if (!CharFilter::is_valid(ch)) return false;
+            NodePtr child = current->children.get(ch);
+            if (!child) return false;
+            path.push({current, ch});
+            current = child;
+        }
+
+        if (!current->is_word_end) return false;
+
+        current->is_word_end = false;
+        --word_count_;
+
+        // 回溯清理不再需要的节点
+        if (current->children.is_leaf())
+        {
+            while (!path.empty())
+            {
+                auto [parent, ch] = path.top();
+                path.pop();
+
+                parent->children.erase(ch);
+                destroy_node(current);
+                current = parent;
+
+                if (current->is_word_end || !current->children.is_leaf())
+                    break;
+            }
+        }
+
+        return true;
+    }
+
+    // ============================================================
+    // 获取所有以给定前缀开头的单词
+    // ============================================================
+    std::vector<std::basic_string<charT>> get_words_with_prefix(
+        const std::basic_string<charT>& prefix) const
+    {
+        std::vector<std::basic_string<charT>> result;
+        NodePtr start = traverse(prefix);
+        if (start)
+        {
+            auto current(prefix);
+            collect_words(start, current, result);
+        }
+        return result;
+    }
+
+    // ============================================================
+    // 基本信息
+    // ============================================================
+    std::size_t words_count() const noexcept { return word_count_; }
+    std::size_t node_count() const noexcept { return node_count_; }
+    bool empty_words() const noexcept { return word_count_ == 0; }
+    bool empty() const noexcept { return node_count_ == 0; }
+    std::size_t size() const noexcept { return node_count_; }
+
+    // ============================================================
+    // 清空
+    // ============================================================
+    void clear()
+    {
+        if (root_)
+        {
+            clear_recursive(root_);
+            root_ = nullptr;
+        }
+        word_count_ = 0;
+        node_count_ = 0;
+    }
+
+    // ============================================================
+    // 分配器
+    // ============================================================
+    Allocator get_allocator() const noexcept
+    {
+        return Allocator(node_alloc_);
+    }
+
+private:
+    // ============================================================
+    // 内部方法
+    // ============================================================
+
+    NodePtr create_node()
+    {
+        NodePtr p = AllocTraits::allocate(node_alloc_, 1);
+        try
+        {
+            AllocTraits::construct(node_alloc_, p);
+        }
+        catch (...)
+        {
+            AllocTraits::deallocate(node_alloc_, p, 1);
+            throw;
+        }
+        ++node_count_;
+        return p;
+    }
+
+    void destroy_node(NodePtr p) noexcept
+    {
+        if (p)
+        {
+            AllocTraits::destroy(node_alloc_, p);
+            AllocTraits::deallocate(node_alloc_, p, 1);
+            --node_count_;
+        }
+    }
+
+    NodePtr traverse(const std::basic_string<charT>& str) const
+    {
+        if (!root_) return nullptr;
+        NodePtr current = root_;
+        for (charT ch : str)
+        {
+            if (!CharFilter::is_valid(ch)) return nullptr;
+            current = current->children.get(ch);
+            if (!current) return nullptr;
+        }
+        return current;
+    }
+
+    void collect_words(
+        NodePtr node,
+        std::basic_string<charT>& prefix,
+        std::vector<std::basic_string<charT>>& result) const
+    {
+        if (node->is_word_end) result.push_back(prefix);
+
+        node->children.for_each(
+            [&](charT ch, NodePtr child)
+            {
+                prefix.push_back(ch);
+                collect_words(child, prefix, result);
+                prefix.pop_back();
+            });
+    }
+
+    void clear_recursive(NodePtr node) noexcept
+    {
+        node->children.for_each(
+            [this](charT, NodePtr child) { clear_recursive(child); });
+        destroy_node(node);
+    }
+
+    void deep_copy(const Trie& other)
+    {
+        if (!other.root_) return;
+
+        std::queue<NodePtr> src_q, dst_q;
+
+        root_ = create_node();
+        root_->is_word_end = other.root_->is_word_end;
+
+        src_q.push(other.root_);
+        dst_q.push(root_);
+
+        while (!src_q.empty())
+        {
+            NodePtr src = src_q.front();
+            src_q.pop();
+            NodePtr dst = dst_q.front();
+            dst_q.pop();
+
+            src->children.for_each(
+                [&](charT ch, NodePtr src_child)
+                {
+                    NodePtr dst_child = create_node();
+                    dst_child->is_word_end = src_child->is_word_end;
+                    dst->children.set(ch, dst_child);
+                    src_q.push(src_child);
+                    dst_q.push(dst_child);
+                });
+        }
+
+        word_count_ = other.word_count_;
+    }
+
+    // ============================================================
+    // 成员变量
+    // ============================================================
+    NodePtr root_ = nullptr;
+    std::size_t word_count_ = 0;
+    std::size_t node_count_ = 0;
+    [[no_unique_address]] NodeAlloc node_alloc_;
+};
+
+// ============================================================
+// 便捷别名
+// ============================================================
+
+// 默认 Trie（稀疏存储，接受所有字符）
+template <typename charT = char, typename Allocator = std::allocator<charT>>
+using BasicTrie = Trie<charT, SparseChildren, AcceptAllChars<charT>, Allocator>;
+
+// 字母数字 Trie（密集存储，62 字符表）
+template <typename charT = char, typename Allocator = std::allocator<charT>>
+using AlphanumericTrie = Trie<
+    charT, DenseChildren, AlphanumericFilter<charT>, Allocator>;
+
+// 小写字母 Trie（密集存储，26 字母表）
+template <typename charT = char, typename Allocator = std::allocator<charT>>
+using LowercaseTrie = Trie<
+    charT, DenseChildren, AcceptAllChars<charT>, Allocator>;
+
+}  // namespace Tree
