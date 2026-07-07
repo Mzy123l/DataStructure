@@ -463,6 +463,17 @@ ctest --test-dir build
 - **新增**: 性能基准测试，与 STL 容器对比
 - **新增**: CMakeLists.txt 构建系统
 
+### 2026-07-07 — Trie 重构优化（稀疏/密集双模式）
+
+- **重构**: 节点内嵌 `is_word_end` 标志，消除外部 `unordered_map` 哈希查找开销
+- **新增**: `SparseChildren` 稀疏存储（`unordered_map`），默认模式，支持任意字符，内存友好
+- **新增**: `DenseChildren` 密集存储（`array` + 字母表映射），O(1) 无哈希，适合固定小字母表
+- **新增**: 模板化字符过滤器（`AcceptAllChars` / `AlphanumericFilter`）
+- **新增**: 预置字母表映射：`AlphanumericMapping`(62) / `LowercaseMapping`(26) / `DNAMapping`(4)
+- **新增**: 便捷别名 `BasicTrie` / `AlphanumericTrie` / `LowercaseTrie`
+- **简化**: 消除 CRTP 继承链，Trie 自包含节点和内存管理
+- **性能**: 插入快 32%（5.07ms vs 7.50ms），搜索快 30%（0.35ms vs 0.50ms）；密集模式搜索快 58%
+
 ## 许可证
 
 本项目采用 MIT 许可证。详见 LICENSE 文件。
