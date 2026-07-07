@@ -463,6 +463,26 @@ ctest --test-dir build
 - **新增**: 性能基准测试，与 STL 容器对比
 - **新增**: CMakeLists.txt 构建系统
 
+### 2026-07-07 — AVLTree & RBTree 性能优化
+
+- **优化**: AVLNode 新增 `get_val()` 直接访问值，绕开 `value().value().get()` 三层调用链
+- **优化**: insert/erase/find 循环中缓存 `get_val()` 到局部变量，减少重复访问
+- **优化**: `balance_upwards` 中缓存子节点指针和高度值，消除冗余计算
+- **优化**: 插入路径提前终止：旋转后立即返回、高度不变时停止向上回溯
+- **优化**: RBNode 全部属性访问方法添加 `[[gnu::always_inline]]` 强制内联
+- **优化**: `Tree_BinaryRepresentation` 辅助函数（left_child/right_child/parent 等）强制内联
+- **优化**: 跨平台 `ALWAYS_INLINE` 宏（GCC/Clang: `__attribute__((always_inline))` / MSVC: `__forceinline`）
+
+**性能对比**（100K 随机插入，O3）:
+
+| 测试项 | 优化前 | 优化后 | 提升 |
+|--------|--------|--------|------|
+| AVLTree 插入 | 16.58ms | 13.71ms | **17.3%** |
+| AVLTree 顺序插入 10K | 0.365ms | 0.209ms | **42.7%** |
+| AVLTree 逆序插入 10K | 0.404ms | 0.200ms | **50.5%** |
+| AVLTree 迭代 50K | 0.099ms | 0.105ms | 保持 (1.7x faster than std::set) |
+| RBTree 删除 | 0.727ms | 0.633ms | **12.9%** |
+
 ## 许可证
 
 本项目采用 MIT 许可证。详见 LICENSE 文件。
