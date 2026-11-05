@@ -143,7 +143,7 @@ namespace TreeNode
 		// 根据指针获取子节点索引
 		std::size_t child_index(NodePtr ptr)
 		{
-			auto it = std::find(child.begin(), child.end(), ptr);
+			auto it = std::find(children.begin(), children.end(), ptr);
 			if (it == children.end())
 			{
 				throw std::out_of_range("Node is not a child of this node");
