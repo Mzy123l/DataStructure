@@ -59,9 +59,9 @@ namespace TreeNode
         using NodePtr = Node*;
         using Base::m_parent;
 
-        // 直接获取值的辅助函数，绕开 std::optional的拆包开销
-        T& get_val() { return *this->data; }
-        const T& get_val() const { return *this->data; }
+        // 直接获取值的辅助函数，零开销
+        T& get_val() { return this->data; }
+        const T& get_val() const { return this->data; }
 
     public:
         // 默认构造

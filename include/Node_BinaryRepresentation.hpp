@@ -86,47 +86,29 @@ namespace TreeNode
 		std::size_t level() const { return depth(); }
 
 		// 判断节点是否包含数据
-		bool has_value() const { return data.has_value(); }
+		bool has_value() const { return true; }
 
 		// 获取节点数据的引用
 		std::optional<std::reference_wrapper<T>> value()
 		{
-			if (data)
-				return std::ref(data.value());
-			return std::nullopt;
+			return std::ref(data);
 		}
 		std::optional<std::reference_wrapper<const T>> value() const
 		{
-			if (data)
-				return std::cref(data.value());
-			return std::nullopt;
+			return std::cref(data);
 		}
 		// 设置节点数据(拷贝/移动)
 		template <typename U>
 			requires std::is_convertible_v<U, T>
 		void set_value(U&& u)
 		{
-			if (!data.has_value())
-			{
-				data = std::optional<T>(std::in_place, std::forward<U>(u));
-			}
-			else
-			{
-				data.value() = std::forward<U>(u);
-			}
+			data = std::forward<U>(u);
 		}
 		// 设置节点数据(原地构造)
 		template <typename... Args>
 		void set_value(Args&&... args)
 		{
-			if (!data.has_value())
-			{
-				data.emplace(std::forward<Args>(args)...);
-			}
-			else
-			{
-				data.value() = T(std::forward<Args>(args)...);
-			}
+			data = T(std::forward<Args>(args)...);
 		}
 
 		// 获取父节点指针

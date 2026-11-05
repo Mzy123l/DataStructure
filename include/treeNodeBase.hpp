@@ -1,6 +1,8 @@
 #pragma once
 #include <optional>
 #include <utility>
+#include <type_traits>
+#include <functional>
 
 namespace TreeNode
 {
@@ -14,17 +16,44 @@ namespace TreeNode
 		*	@brief	构造函数
 		*/
 		// 默认构造函数
-		NodeBase() :data(std::nullopt) {}
+		NodeBase() :data() {}
 
+		// 拷贝构造（T 支持拷贝时可用，否则自动丢弃，不影响只移动类型）
+		NodeBase(const NodeBase& other)
+			requires std::copy_constructible<T>
+			: data(other.data) {}
 
-		// 移动& 拷贝构造
+		// 拷贝赋值
+		NodeBase& operator=(const NodeBase& other)
+			requires std::copy_constructible<T> && std::assignable_from<T&, const T&>
+		{
+			if (this != &other)
+				data = other.data;
+			return *this;
+		}
+
+		// 移动构造
+		NodeBase(NodeBase&& other) noexcept(std::is_nothrow_move_constructible_v<T>)
+			requires std::move_constructible<T>
+			: data(std::move(other.data)) {}
+
+		// 移动赋值
+		NodeBase& operator=(NodeBase&& other) noexcept(std::is_nothrow_move_assignable_v<T>)
+			requires std::assignable_from<T&, T>
+		{
+			if (this != &other)
+				data = std::move(other.data);
+			return *this;
+		}
+
+		// 隐式转换构造
 		template <typename U>
 			requires std::is_convertible_v<U, T>
-		NodeBase(U&& u) : data(std::in_place, std::forward<U>(u)) {}
+		NodeBase(U&& u) : data(std::forward<U>(u)) {}
 
 		// 原地构造
 		template <typename... Args>
-		NodeBase(std::in_place_t, Args&&... args) :data(std::in_place, std::forward<Args>(args)...) {}
+		NodeBase(std::in_place_t, Args&&... args) :data(std::forward<Args>(args)...) {}
 		/*
 		*	@brief	析构函数
 		*/
@@ -60,10 +89,10 @@ namespace TreeNode
 		*/
 
 		// 获取是否有值
-		bool has_value() const { return static_cast<Derived*>(this)->has_value(); }
+		bool has_value() const { return true; }
 
 		// 获取自身引用  安全引用--零开销
-		std::optional<std::reference_wrapper<T>> value() { return static_cast<Derived*>(this)->value(); }
+		std::optional<std::reference_wrapper<T>> value() { return std::ref(data); }
 
 		// set_value()
 		template <typename U>
@@ -133,10 +162,9 @@ namespace TreeNode
 	protected:
 
 		/*
-		*	普通节点有值
-		*	哨兵节点std::nullopt
+		*	节点通常直接持有值
 		*/
-		std::optional<T> data;
+		T data;
 
 
 
